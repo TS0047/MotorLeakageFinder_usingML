@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Motor Leak Detector</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#080e1a;color:#dde6ff;font-family:'Segoe UI',sans-serif;
+     display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+header{background:#0c1629;padding:12px 28px;border-bottom:2px solid #1e3a8a;
+       display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+header h1{font-size:1.15rem;color:#60a5fa;letter-spacing:2px}
+.badge{font-size:0.7rem;color:#4b6080}
+
+.main{display:flex;flex:1;overflow:hidden}
+.pl{width:255px;min-width:255px;background:#0c1629;border-right:1px solid #1a3050;
+    padding:14px;display:flex;flex-direction:column;gap:10px;overflow-y:auto}
+.pc{flex:1;background:#080e1a;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:6px}
+.pr{width:270px;min-width:270px;background:#0c1629;border-left:1px solid #1a3050;
+    display:flex;flex-direction:column;align-items:center;padding:14px;gap:4px}
+
+footer{background:#0c1629;border-top:2px solid #1e3a8a;padding:10px 24px;
+       display:flex;align-items:center;gap:28px;flex-shrink:0}
+
+.stitle{font-size:0.62rem;color:#3d5a7a;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+.sw{display:flex;flex-direction:column;gap:3px}
+.sr{display:flex;justify-content:space-between;align-items:center}
+.sn{font-size:0.76rem;color:#7eb5f0}
+.sv{font-size:0.8rem;font-weight:700;color:#fbbf24;min-width:46px;text-align:right}
+input[type=range]{width:100%;height:4px;accent-color:#3b82f6;cursor:pointer}
+
+.btn{padding:10px;background:linear-gradient(135deg,#1d4ed8,#2563eb);border:none;
+     border-radius:6px;color:#fff;font-size:0.9rem;font-weight:600;cursor:pointer;
+     letter-spacing:1px;box-shadow:0 0 14px #1d4ed840;transition:all .2s}
+.btn:hover{background:linear-gradient(135deg,#2563eb,#3b82f6)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+.legend{display:flex;flex-direction:column;gap:5px}
+.li{display:flex;align-items:center;gap:6px;font-size:0.7rem;color:#7b8da8}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+
+.rzone{font-size:1.35rem;font-weight:700;letter-spacing:2px;min-width:240px}
+.pbrow{display:flex;gap:6px;align-items:flex-end;height:46px}
+.pcol{display:flex;flex-direction:column;align-items:center;gap:2px}
+.pbar{width:30px;border-radius:3px 3px 0 0;transition:height .5s ease;min-height:2px}
+.plbl{font-size:0.6rem;color:#5a7a9a}
+.ppct{font-size:0.62rem}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⚙ MOTOR LEAK DETECTION SYSTEM</h1>
+  <span class="badge">Neural Network Diagnostic · Real-time Analysis</span>
+</header>
+
+<div class="main">
+
+  <!-- LEFT: INPUTS -->
+  <div class="pl">
+    <div class="stitle">Sensor Readings</div>
+
+    <div class="sw">
+      <div class="sr"><span class="sn">RPM</span><span class="sv" id="v0">1700</span></div>
+      <input type="range" min="1500" max="2200" step="10" value="1700" oninput="upd(0,this.value,0)">
+    </div>
+    <div class="sw">
+      <div class="sr"><span class="sn">Airflow — AF (g/s)</span><span class="sv" id="v1">7.50</span></div>
+      <input type="range" min="3.0" max="15.0" step="0.1" value="7.5" oninput="upd(1,this.value,2)">
+    </div>
+    <div class="sw">
+      <div class="sr"><span class="sn">Exhaust Gas Temp — EGT (°C)</span><span class="sv" id="v2">335</span></div>
+      <input type="range" min="200" max="650" step="1" value="335" oninput="upd(2,this.value,0)">
+    </div>
+    <div class="sw">
+      <div class="sr"><span class="sn">Intake Pressure — IP (bar)</span><span class="sv" id="v3">1.24</span></div>
+      <input type="range" min="0.90" max="2.00" step="0.01" value="1.24" oninput="upd(3,this.value,2)">
+    </div>
+    <div class="sw">
+      <div class="sr"><span class="sn">Exhaust Pressure — EP (bar)</span><span class="sv" id="v4">1.14</span></div>
+      <input type="range" min="0.80" max="1.80" step="0.01" value="1.14" oninput="upd(4,this.value,2)">
+    </div>
+
+    <button class="btn" id="btn" onclick="analyze()">▶ ANALYZE</button>
+
+    <div>
+      <div class="stitle">Zone Guide</div>
+      <div class="legend">
+        <div class="li"><div class="dot" style="background:#34d399"></div>NONE — System Healthy</div>
+        <div class="li"><div class="dot" style="background:#f87171"></div>Zone A — Airflow drop (AF meter → Turbo)</div>
+        <div class="li"><div class="dot" style="background:#fb923c"></div>Zone B — IP drop + EGT rise (Compressor → Intercooler)</div>
+        <div class="li"><div class="dot" style="background:#a78bfa"></div>Zone C — EGT rise only (Exhaust Manifold → Turbine)</div>
+        <div class="li"><div class="dot" style="background:#38bdf8"></div>Zone D — EP drop (Ducting)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTER: NN CANVAS -->
+  <div class="pc">
+    <div class="stitle">Neural Network — Signal Propagation</div>
+    <canvas id="nn" width="490" height="380"></canvas>
+  </div>
+
+  <!-- RIGHT: ENGINE DIAGRAM -->
+  <div class="pr">
+    <div class="stitle">Engine Block Diagram</div>
+    <svg viewBox="0 0 230 506" width="210" height="462">
+
+      <rect x="65" y="6" width="100" height="34" rx="5" fill="#0d1e36" stroke="#1e40af" stroke-width="1.5"/>
+      <text x="115" y="28" text-anchor="middle" fill="#93c5fd" font-size="11" font-weight="600">Air Filter</text>
+
+      <line x1="115" y1="40" x2="115" y2="60" stroke="#1a3050" stroke-width="2"/>
+
+      <g id="g-za">
+        <rect x="72" y="54" width="86" height="20" rx="10" fill="#1a2840" stroke="#2d4060" stroke-width="1"/>
+        <text x="115" y="68" text-anchor="middle" font-size="9" fill="#4b6080" id="t-za">ZONE A</text>
+      </g>
+
+      <line x1="115" y1="74" x2="115" y2="96" stroke="#1a3050" stroke-width="2"/>
+
+      <rect x="46" y="96" width="138" height="40" rx="5" fill="#0d1e36" stroke="#1e40af" stroke-width="1.5"/>
+      <text x="115" y="113" text-anchor="middle" fill="#93c5fd" font-size="11" font-weight="600">Turbo Compressor</text>
+      <text x="115" y="129" text-anchor="middle" fill="#2d4a6a" font-size="8.5" id="ts">— RPM</text>
+
+      <line x1="115" y1="136" x2="115" y2="156" stroke="#1a3050" stroke-width="2"/>
+
+      <g id="g-zb">
+        <rect x="72" y="150" width="86" height="20" rx="10" fill="#1a2840" stroke="#2d4060" stroke-width="1"/>
+        <text x="115" y="164" text-anchor="middle" font-size="9" fill="#4b6080" id="t-zb">ZONE B</text>
+      </g>
+
+      <line x1="115" y1="170" x2="115" y2="190" stroke="#1a3050" stroke-width="2"/>
+
+      <rect x="46" y="190" width="138" height="34" rx="5" fill="#0d1e36" stroke="#1e40af" stroke-width="1.5"/>
+      <text x="115" y="212" text-anchor="middle" fill="#93c5fd" font-size="11" font-weight="600">Intercooler</text>
+
+      <line x1="115" y1="224" x2="115" y2="250" stroke="#1a3050" stroke-width="2"/>
+
+      <rect x="26" y="250" width="178" height="58" rx="6" fill="#0d1e36" stroke="#1e40af" stroke-width="2"/>
+      <text x="115" y="279" text-anchor="middle" fill="#93c5fd" font-size="15" font-weight="700">ENGINE</text>
+      <text x="115" y="298" text-anchor="middle" fill="#2d4a6a" font-size="8.5">Diesel / Turbocharged</text>
+
+      <line x1="115" y1="308" x2="115" y2="328" stroke="#1a3050" stroke-width="2"/>
+
+      <g id="g-zc">
+        <rect x="72" y="322" width="86" height="20" rx="10" fill="#1a2840" stroke="#2d4060" stroke-width="1"/>
+        <text x="115" y="336" text-anchor="middle" font-size="9" fill="#4b6080" id="t-zc">ZONE C</text>
+      </g>
+
+      <line x1="115" y1="342" x2="115" y2="362" stroke="#1a3050" stroke-width="2"/>
+
+      <rect x="46" y="362" width="138" height="34" rx="5" fill="#0d1e36" stroke="#1e40af" stroke-width="1.5"/>
+      <text x="115" y="384" text-anchor="middle" fill="#93c5fd" font-size="11" font-weight="600">Turbine</text>
+
+      <line x1="115" y1="396" x2="115" y2="416" stroke="#1a3050" stroke-width="2"/>
+
+      <g id="g-zd">
+        <rect x="72" y="410" width="86" height="20" rx="10" fill="#1a2840" stroke="#2d4060" stroke-width="1"/>
+        <text x="115" y="424" text-anchor="middle" font-size="9" fill="#4b6080" id="t-zd">ZONE D</text>
+      </g>
+
+      <line x1="115" y1="430" x2="115" y2="450" stroke="#1a3050" stroke-width="2"/>
+
+      <rect x="65" y="450" width="100" height="34" rx="5" fill="#0d1e36" stroke="#1e40af" stroke-width="1.5"/>
+      <text x="115" y="472" text-anchor="middle" fill="#93c5fd" font-size="11" font-weight="600">Exhaust Out</text>
+
+      <text x="12" y="165" text-anchor="middle" fill="#1a3050" font-size="7" transform="rotate(-90,12,165)">← AIR INTAKE FLOW</text>
+      <text x="220" y="355" text-anchor="middle" fill="#1a3050" font-size="7" transform="rotate(90,220,355)">EXHAUST FLOW →</text>
+    </svg>
+  </div>
+
+</div>
+
+<!-- FOOTER: RESULT -->
+<footer>
+  <div>
+    <div class="stitle">Diagnosis</div>
+    <div class="rzone" id="rtext" style="color:#2d4060">— Awaiting Input —</div>
+  </div>
+  <div>
+    <div class="stitle" style="margin-bottom:6px">Class Confidence</div>
+    <div class="pbrow" id="prow"></div>
+  </div>
+  <div style="margin-left:auto;font-size:0.7rem;color:#2d4060">PyTorch · Flask</div>
+</footer>
+
+<script>
+const vals = [1700, 7.5, 335, 1.24, 1.14];
+const ZC = {NONE:'#34d399', A:'#f87171', B:'#fb923c', C:'#a78bfa', D:'#38bdf8'};
+const ZL = ['NONE','A','B','C','D'];
+
+// ── Sliders
+function upd(i, v, dec) {
+  vals[i] = parseFloat(v);
+  document.getElementById('v'+i).textContent = parseFloat(v).toFixed(dec);
+  if (i === 0) {
+    const ts = Math.round(52000 + (vals[0]-1600)/(2200-1600)*(115000-52000));
+    document.getElementById('ts').textContent = ts.toLocaleString() + ' RPM';
+  }
+}
+// init turbo display
+document.getElementById('ts').textContent =
+  Math.round(52000 + (1700-1600)/(600)*(63000)).toLocaleString() + ' RPM';
+
+// ── Neural Net Canvas
+const cv = document.getElementById('nn');
+const cx = cv.getContext('2d');
+const W = cv.width, H = cv.height;
+const LGAP = 52;
+const LX = [68, 196, 318, 442];
+const LAYERS = [
+  {n:5, labels:['RPM','AF','EGT','IP','EP']},
+  {n:6, labels:[]},
+  {n:4, labels:[]},
+  {n:5, labels:['NONE','A','B','C','D']},
+];
+const LTITLES = ['Input (5)','Hidden (64)','Hidden (32)','Output (5)'];
+
+function npos(l, i) {
+  const total = (LAYERS[l].n - 1) * LGAP;
+  return { x: LX[l], y: H/2 - total/2 + i*LGAP };
+}
+
+function drawNN(glowL=-1, resultZone=null) {
+  cx.clearRect(0, 0, W, H);
+
+  // grid
+  cx.strokeStyle='#0b1421'; cx.lineWidth=0.5;
+  for(let x=0;x<W;x+=28){cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,H);cx.stroke();}
+  for(let y=0;y<H;y+=28){cx.beginPath();cx.moveTo(0,y);cx.lineTo(W,y);cx.stroke();}
+
+  // base connections
+  for(let l=0;l<3;l++){
+    for(let i=0;i<LAYERS[l].n;i++){
+      for(let j=0;j<LAYERS[l+1].n;j++){
+        const p1=npos(l,i), p2=npos(l+1,j);
+        cx.beginPath(); cx.moveTo(p1.x,p1.y); cx.lineTo(p2.x,p2.y);
+        cx.strokeStyle = l<glowL ? '#1a3555':'#0d1d30';
+        cx.lineWidth   = l<glowL ? 0.7:0.4;
+        cx.stroke();
+      }
+    }
+  }
+
+  // glow gradient connections for active transitions
+  for(let l=0; l<Math.min(glowL,3); l++){
+    for(let i=0;i<LAYERS[l].n;i++){
+      for(let j=0;j<LAYERS[l+1].n;j++){
+        const p1=npos(l,i), p2=npos(l+1,j);
+        const g=cx.createLinearGradient(p1.x,p1.y,p2.x,p2.y);
+        g.addColorStop(0,'#3b82f650'); g.addColorStop(1,'#60a5fa12');
+        cx.beginPath(); cx.moveTo(p1.x,p1.y); cx.lineTo(p2.x,p2.y);
+        cx.strokeStyle=g; cx.lineWidth=1.1; cx.stroke();
+      }
+    }
+  }
+
+  // layer title
+  LTITLES.forEach((t,l)=>{
+    const p=npos(l,0);
+    cx.fillStyle='#2d4a6a'; cx.font='9px Segoe UI'; cx.textAlign='center';
+    cx.fillText(t, LX[l], p.y-20);
+  });
+
+  // nodes
+  LAYERS.forEach((layer,l)=>{
+    for(let i=0;i<layer.n;i++){
+      const p=npos(l,i);
+      const active = l<=glowL;
+      const isOut  = l===3;
+      let fill='#0c1e33', stroke='#0d1d30', r=11, glow=null;
+
+      if(active){
+        if(isOut && resultZone){
+          const zl=ZL[i];
+          if(zl===resultZone){ fill=ZC[zl]; stroke=ZC[zl]; r=15; glow=ZC[zl]; }
+          else { fill='#0c1e33'; stroke='#1a3050'; r=10; }
+        } else {
+          fill='#1a3a7a'; stroke='#3b82f6'; glow='#3b82f6';
+        }
+      }
+
+      if(glow){ cx.shadowColor=glow; cx.shadowBlur=22; }
+      cx.beginPath(); cx.arc(p.x,p.y,r,0,Math.PI*2);
+      cx.fillStyle=fill; cx.fill();
+      cx.strokeStyle=stroke; cx.lineWidth=1.5; cx.stroke();
+      cx.shadowBlur=0;
+
+      const lbl=layer.labels[i];
+      if(lbl){
+        cx.fillStyle=active?'#c0d8ff':'#2d4060';
+        cx.font='9px Segoe UI';
+        cx.textAlign = l===0?'right':'left';
+        cx.fillText(lbl, l===0?p.x-15:p.x+16, p.y+3.5);
+      }
+    }
+  });
+}
+drawNN();
+
+// ── Prob bars
+function showProbs(probs, zone){
+  const row=document.getElementById('prow');
+  row.innerHTML='';
+  ZL.forEach((z,i)=>{
+    const h=Math.max(2, probs[i]*42);
+    const col=z===zone ? ZC[zone]:'#1a3050';
+    const pct=(probs[i]*100).toFixed(0)+'%';
+    row.innerHTML+=`<div class="pcol">
+      <span class="ppct" style="color:${col}">${pct}</span>
+      <div class="pbar" style="height:${h}px;background:${col}"></div>
+      <span class="plbl">${z}</span>
+    </div>`;
+  });
+}
+
+// ── Engine highlight
+const ZE={A:'g-za',B:'g-zb',C:'g-zc',D:'g-zd'};
+const ZT={A:'t-za',B:'t-zb',C:'t-zc',D:'t-zd'};
+
+function resetEng(){
+  ['A','B','C','D'].forEach(z=>{
+    document.getElementById(ZE[z]).querySelector('rect').setAttribute('stroke','#2d4060');
+    document.getElementById(ZE[z]).querySelector('rect').setAttribute('fill','#1a2840');
+    const t=document.getElementById(ZT[z]);
+    t.setAttribute('fill','#4b6080');
+    t.textContent='ZONE '+z;
+  });
+}
+function hlEng(zone){
+  resetEng();
+  if(zone==='NONE') return;
+  const c=ZC[zone];
+  document.getElementById(ZE[zone]).querySelector('rect').setAttribute('stroke',c);
+  document.getElementById(ZE[zone]).querySelector('rect').setAttribute('fill',c+'28');
+  const t=document.getElementById(ZT[zone]);
+  t.setAttribute('fill',c);
+  t.textContent='⚠ ZONE '+zone+' — LEAK';
+}
+
+// ── Analyze
+async function analyze(){
+  const btn=document.getElementById('btn');
+  btn.disabled=true; btn.textContent='⏳ Analyzing...';
+
+  // fire request in parallel with animation
+  const req=fetch('/predict',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({RPM:vals[0],AF:vals[1],EGT:vals[2],IP:vals[3],EP:vals[4]})
+  });
+
+  const delay=ms=>new Promise(r=>setTimeout(r,ms));
+  for(let l=0;l<=2;l++){ drawNN(l); await delay(370); }
+
+  let data;
+  try{ data=await (await req).json(); }
+  catch(e){
+    alert('Server error. Is Flask running on port 5000?');
+    btn.disabled=false; btn.textContent='▶ ANALYZE'; return;
+  }
+
+  const zone=data.zone, probs=data.probs;
+  drawNN(3, zone);
+
+  const rEl=document.getElementById('rtext');
+  rEl.style.color=ZC[zone];
+  rEl.textContent = zone==='NONE' ? '✔  System Healthy — No Leak Detected'
+                                  : '⚠  Leak Detected — Zone '+zone;
+
+  showProbs(probs, zone);
+  hlEng(zone);
+  btn.disabled=false; btn.textContent='▶ ANALYZE';
+}
+</script>
+</body>
+</html>
